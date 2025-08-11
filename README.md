@@ -159,11 +159,31 @@ This section provides step-by-step instructions for training the resume NER mode
 
 # Set up Kaggle credentials (you'll need to upload kaggle.json)
 import os
-os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/'
+import shutil
 
-# Download required datasets
-!kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
-!kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+# Copy kaggle.json to writable directory
+kaggle_creds_path = '/kaggle/input/kaggle-credentials/kaggle.json'
+working_dir = '/kaggle/working'
+
+if os.path.exists(kaggle_creds_path):
+    # Create config directory in writable location
+    config_dir = f'{working_dir}/.kaggle'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    # Copy credentials file
+    shutil.copy(kaggle_creds_path, f'{config_dir}/kaggle.json')
+    
+    # Set environment variable
+    os.environ['KAGGLE_CONFIG_DIR'] = config_dir
+    
+    print("✅ Kaggle credentials copied to writable directory")
+    
+    # Download required datasets
+    !kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
+    !kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+else:
+    print("❌ kaggle.json not found in uploaded dataset")
+    print("Please upload your kaggle.json file as a dataset named 'kaggle-credentials'")
 
 # Unzip datasets
 !unzip data/ats-scoring-dataset.zip -d data/
@@ -504,7 +524,7 @@ Here's a minimal working example for Kaggle:
    # 4. Reference it in your notebook:
    
    import os
-   os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/your-dataset-name/'
+   os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/kaggle-credentials/'
    
    # Test credentials
    !kaggle config view
@@ -563,16 +583,39 @@ Here's a minimal working example for Kaggle:
 
 **Step 3: Use in Notebook**
 ```python
-# Set the correct path to your uploaded credentials
+# Method 1: Copy credentials to writable directory (Recommended)
 import os
-os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/kaggle-credentials/'
+import shutil
 
-# Test the setup
-!kaggle config view
+# Copy kaggle.json to writable directory
+kaggle_creds_path = '/kaggle/input/kaggle-credentials/kaggle.json'
+working_dir = '/kaggle/working'
 
-# Now download datasets
-!kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
-!kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+if os.path.exists(kaggle_creds_path):
+    # Create config directory in writable location
+    config_dir = f'{working_dir}/.kaggle'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    # Copy credentials file
+    shutil.copy(kaggle_creds_path, f'{config_dir}/kaggle.json')
+    
+    # Set environment variable
+    os.environ['KAGGLE_CONFIG_DIR'] = config_dir
+    
+    print("✅ Kaggle credentials copied to writable directory")
+    
+    # Test the setup
+    !kaggle config view
+    
+    # Now download datasets
+    !kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
+    !kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+else:
+    print("❌ kaggle.json not found in uploaded dataset")
+
+# Method 2: Set credentials directly (Alternative)
+# os.environ['KAGGLE_USERNAME'] = 'your_kaggle_username'
+# os.environ['KAGGLE_KEY'] = 'your_kaggle_api_key'
 ```
 
 **Step 4: Verify Setup**
