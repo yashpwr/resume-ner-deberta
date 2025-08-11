@@ -1,0 +1,32 @@
+model:
+  name: "microsoft/deberta-v3-small"
+  max_length: 256
+  stride: 32
+
+training:
+  learning_rate: 3e-4
+  batch_size: 8
+  grad_accum_steps: 2
+  num_epochs: 5
+  early_stopping_patience: 3
+  warmup_steps: 100
+  weight_decay: 0.01
+  fp16: true
+  label_smoothing: 0.05
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: ["query", "value"]
+
+data:
+  train_file: "data/train.jsonl"
+  val_file: "data/val.jsonl"
+  test_file: "data/test.jsonl"
+
+output:
+  model_dir: "artifacts/model"
+  logs_dir: "artifacts/logs"
+
+seed: 42
