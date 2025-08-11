@@ -135,12 +135,20 @@ This section provides step-by-step instructions for training the resume NER mode
 ### **Step 2: Clone the Repository**
 
 ```python
-# Clone the repository
+# Always reset to a valid directory
+%cd /kaggle/working
+
+# If folder exists from a previous run, remove it
+!rm -rf resume-ner-deberta
+
+# Clone fresh
 !git clone https://github.com/yashpwr/resume-ner-deberta.git
+
+# Enter the repo
 %cd resume-ner-deberta
 
-# Install dependencies
-!pip install -r requirements.txt
+# Install requirements (if file exists)
+!if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 ```
 
 ### **Step 3: Setup Kaggle Datasets**
@@ -486,6 +494,106 @@ Here's a minimal working example for Kaggle:
    if not torch.cuda.is_available():
        kaggle_config['training']['fp16'] = False
    ```
+
+5. **Kaggle API Credential Issues**
+   ```python
+   # Method 1: Upload kaggle.json as a dataset
+   # 1. Create a new dataset on Kaggle
+   # 2. Upload your kaggle.json file
+   # 3. Make it private for security
+   # 4. Reference it in your notebook:
+   
+   import os
+   os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/your-dataset-name/'
+   
+   # Test credentials
+   !kaggle config view
+   
+   # Method 2: Set credentials directly
+   os.environ['KAGGLE_USERNAME'] = 'your_kaggle_username'
+   os.environ['KAGGLE_KEY'] = 'your_kaggle_api_key'
+   
+   # Method 3: Use Kaggle's built-in credentials
+   # If you're logged into Kaggle, you can use:
+   !kaggle datasets list --limit 5
+   ```
+
+6. **Dataset Download Failures**
+   ```python
+   # Verify dataset exists and is accessible
+   !kaggle datasets list --search "ats scoring"
+   !kaggle datasets list --search "annotated ner pdf resumes"
+   
+   # Check if you have access to the dataset
+   !kaggle datasets metadata -d mgmitesh/ats-scoring-dataset
+   
+   # Alternative: Download manually and upload to Kaggle
+   # 1. Download dataset locally
+   # 2. Upload as a new dataset to your Kaggle account
+   # 3. Use your own dataset in the notebook
+   ```
+
+7. **File Permission Issues**
+   ```python
+   # Check file permissions
+   !ls -la /kaggle/input/
+   
+   # Verify kaggle.json is readable
+   !cat /kaggle/input/your-dataset-name/kaggle.json
+   
+   # Set correct permissions if needed
+   !chmod 600 /kaggle/input/your-dataset-name/kaggle.json
+   ```
+
+#### **Kaggle Credential Setup Guide**
+
+**Step 1: Get Your Kaggle API Credentials**
+1. Go to [Kaggle Account Settings](https://www.kaggle.com/settings/account)
+2. Scroll down to "API" section
+3. Click "Create New API Token"
+4. Download `kaggle.json` file
+
+**Step 2: Upload Credentials to Kaggle**
+1. Go to [Kaggle Datasets](https://www.kaggle.com/datasets)
+2. Click "Create Dataset"
+3. Name it `kaggle-credentials` or similar
+4. Upload your `kaggle.json` file
+5. Make it **Private** (important for security)
+6. Click "Create"
+
+**Step 3: Use in Notebook**
+```python
+# Set the correct path to your uploaded credentials
+import os
+os.environ['KAGGLE_CONFIG_DIR'] = '/kaggle/input/kaggle-credentials/'
+
+# Test the setup
+!kaggle config view
+
+# Now download datasets
+!kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
+!kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+```
+
+**Step 4: Verify Setup**
+```python
+# Check if credentials are working
+!kaggle datasets list --limit 3
+
+# Check if target datasets are accessible
+!kaggle datasets metadata -d mgmitesh/ats-scoring-dataset
+!kaggle datasets metadata -d mehyaar/annotated-ner-pdf-resumes
+```
+
+**Common Credential Errors & Solutions:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `KeyError: 'username'` | Missing or invalid `kaggle.json` | Upload correct `kaggle.json` as dataset |
+| `403 Forbidden` | No access to dataset | Check dataset privacy settings |
+| `404 Not Found` | Dataset doesn't exist | Verify dataset name and owner |
+| `Authentication failed` | Invalid API key | Regenerate API key in Kaggle settings |
+| `Permission denied` | File permission issues | Check file permissions in uploaded dataset |
 
 ## 📊 Dataset Sources
 
