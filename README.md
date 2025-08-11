@@ -162,7 +162,7 @@ import os
 import shutil
 
 # Copy kaggle.json to writable directory
-kaggle_creds_path = '/kaggle/input/kaggle-credentials/kaggle.json'
+kaggle_creds_path = '/kaggle/input/yashpwrr-kaggle-credentials/kaggle.json'
 working_dir = '/kaggle/working'
 
 if os.path.exists(kaggle_creds_path):
@@ -180,10 +180,10 @@ if os.path.exists(kaggle_creds_path):
     
     # Download required datasets
     !kaggle datasets download -d mgmitesh/ats-scoring-dataset -p data/
-    !kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -p data/
+    !kaggle datasets download -d mehyaar/annotated-ner-pdf-resumes -d data/
 else:
     print("❌ kaggle.json not found in uploaded dataset")
-    print("Please upload your kaggle.json file as a dataset named 'kaggle-credentials'")
+    print("Please upload your kaggle.json file as a dataset named 'yashpwrr/kaggle-credentials'")
 
 # Unzip datasets
 !unzip data/ats-scoring-dataset.zip -d data/
@@ -588,7 +588,7 @@ import os
 import shutil
 
 # Copy kaggle.json to writable directory
-kaggle_creds_path = '/kaggle/input/kaggle-credentials/kaggle.json'
+kaggle_creds_path = '/kaggle/input/yashpwrr-kaggle-credentials/kaggle.json'
 working_dir = '/kaggle/working'
 
 if os.path.exists(kaggle_creds_path):
