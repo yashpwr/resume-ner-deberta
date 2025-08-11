@@ -59,12 +59,19 @@ class ResumeNERTrainer:
     
     def setup_logging(self):
         """Setup logging configuration."""
+        # Get the directory where this script is located
+        script_dir = Path(__file__).parent.parent
+        artifacts_dir = script_dir / 'artifacts'
+        
+        # Create artifacts directory if it doesn't exist
+        os.makedirs(artifacts_dir, exist_ok=True)
+        
         log_level = logging.INFO
         logging.basicConfig(
             level=log_level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler('artifacts/training.log'),
+                logging.FileHandler(artifacts_dir / 'training.log'),
                 logging.StreamHandler()
             ]
         )
@@ -294,9 +301,19 @@ class ResumeNERTrainer:
         # Train
         trainer.train()
         
+        # Get the directory where this script is located
+        script_dir = Path(__file__).parent.parent
+        
+        # Create output directories with absolute paths
+        model_dir = script_dir / self.config['output']['model_dir']
+        logs_dir = script_dir / self.config['output']['logs_dir']
+        
+        os.makedirs(model_dir, exist_ok=True)
+        os.makedirs(logs_dir, exist_ok=True)
+        
         # Save best model
         trainer.save_model()
-        self.tokenizer.save_pretrained(self.config['output']['model_dir'])
+        self.tokenizer.save_pretrained(str(model_dir))
         
         # Save label mappings
         label_mappings = {
@@ -304,7 +321,7 @@ class ResumeNERTrainer:
             'id2label': self.id2label
         }
         
-        with open(Path(self.config['output']['model_dir']) / 'label_mappings.json', 'w') as f:
+        with open(model_dir / 'label_mappings.json', 'w') as f:
             json.dump(label_mappings, f, indent=2)
         
         logger.info("Training completed!")
@@ -332,7 +349,7 @@ class ResumeNERTrainer:
                     logger.info(f"{key}: {value:.4f}")
             
             # Save test results
-            results_file = Path(self.config['output']['model_dir']) / 'test_results.json'
+            results_file = model_dir / 'test_results.json'
             with open(results_file, 'w') as f:
                 json.dump(test_results, f, indent=2)
             
