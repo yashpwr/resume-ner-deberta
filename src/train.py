@@ -7,9 +7,16 @@ import argparse
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Tuple, Dict, List, Any, Optional
 import yaml
+
+# Add the src directory to Python path for imports
+script_dir = Path(__file__).parent
+project_root = script_dir.parent
+sys.path.insert(0, str(script_dir))
+sys.path.insert(0, str(project_root))
 
 import torch
 import numpy as np
@@ -23,6 +30,7 @@ from seqeval.metrics import precision_score, recall_score, f1_score, classificat
 from sklearn.model_selection import train_test_split
 import evaluate
 
+# Import from the same directory
 from data_io import load_all_datasets
 from label_space import process_label_space
 from chunk_align import create_tokenizer_chunker
