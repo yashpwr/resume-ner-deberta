@@ -301,7 +301,7 @@ class ResumeNERTrainer:
             target_modules = ["query", "key", "value"]
         
         lora_config = LoraConfig(
-            task_type="TOKEN_CLASSIFICATION",  # Use string instead of enum
+            task_type="TOKEN_CLS",  # Correct PEFT task type
             r=self.config['lora'].get('r', 8),
             lora_alpha=self.config['lora'].get('alpha', 16),
             lora_dropout=self.config['lora'].get('dropout', 0.05),
