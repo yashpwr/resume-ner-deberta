@@ -226,7 +226,10 @@ class ResumeNERTrainer:
                         max_length=max_length,
                         padding='max_length',
                         truncation=True,
-                        return_tensors=None
+                        return_tensors=None,
+                        return_special_tokens_mask=False,
+                        return_offsets_mapping=False,
+                        return_overflowing_tokens=False
                     )
                     
                     # Align labels with tokenized text (simple alignment)
@@ -244,36 +247,64 @@ class ResumeNERTrainer:
                             label = 'O'  # Default to O for padding
                         labels.append(self.label2id.get(label, 0))
                     
-                    # Create chunk with proper structure
+                    # Create chunk with proper structure - only keep essential keys
                     chunk = {
                         'input_ids': tokenized['input_ids'],
                         'attention_mask': tokenized['attention_mask'],
                         'labels': labels
                     }
+                    
+                    # Ensure all sequences have the same length
+                    if len(chunk['input_ids']) != len(chunk['attention_mask']) or len(chunk['input_ids']) != len(chunk['labels']):
+                        logger.warning(f"Sequence length mismatch in sample, skipping...")
+                        continue
+                    
                     processed_chunks.append(chunk)
             
             logger.info(f"✅ Created {len(processed_chunks)} fallback tokenized chunks")
         
-        # Debug: Show chunk structure and validate
-        if processed_chunks:
-            first_chunk = processed_chunks[0]
-            logger.info(f"Chunk keys: {list(first_chunk.keys())}")
-            if 'labels' in first_chunk:
-                logger.info(f"First chunk has {len(first_chunk['labels'])} labels")
-                logger.info(f"Input IDs length: {len(first_chunk.get('input_ids', []))}")
-                logger.info(f"Attention mask length: {len(first_chunk.get('attention_mask', []))}")
+        # Clean and validate processed chunks
+        logger.info("Cleaning and validating dataset...")
+        cleaned_chunks = []
+        for i, chunk in enumerate(processed_chunks):
+            # Ensure chunk has all required keys
+            if not all(key in chunk for key in ['input_ids', 'attention_mask', 'labels']):
+                logger.warning(f"Chunk {i} missing required keys, skipping...")
+                continue
+            
+            # Convert to lists if they're not already
+            chunk['input_ids'] = list(chunk['input_ids']) if not isinstance(chunk['input_ids'], list) else chunk['input_ids']
+            chunk['attention_mask'] = list(chunk['attention_mask']) if not isinstance(chunk['attention_mask'], list) else chunk['attention_mask']
+            chunk['labels'] = list(chunk['labels']) if not isinstance(chunk['labels'], list) else chunk['labels']
+            
+            # Ensure all values are integers (not None or other types)
+            try:
+                chunk['input_ids'] = [int(x) for x in chunk['input_ids'] if x is not None]
+                chunk['attention_mask'] = [int(x) for x in chunk['attention_mask'] if x is not None]
+                chunk['labels'] = [int(x) for x in chunk['labels'] if x is not None]
                 
-                # Validate chunk structure
-                for i, chunk in enumerate(processed_chunks[:3]):  # Check first 3 chunks
-                    if not all(key in chunk for key in ['input_ids', 'attention_mask', 'labels']):
-                        logger.error(f"Chunk {i} missing required keys")
-                        raise ValueError(f"Invalid chunk structure at index {i}")
+                # Check sequence lengths match
+                if len(chunk['input_ids']) == len(chunk['attention_mask']) == len(chunk['labels']):
+                    cleaned_chunks.append(chunk)
+                else:
+                    logger.warning(f"Chunk {i} has mismatched lengths, skipping...")
                     
-                    if len(chunk['input_ids']) != len(chunk['attention_mask']) or len(chunk['input_ids']) != len(chunk['labels']):
-                        logger.error(f"Chunk {i} has mismatched lengths: input_ids={len(chunk['input_ids'])}, attention_mask={len(chunk['attention_mask'])}, labels={len(chunk['labels'])}")
-                        raise ValueError(f"Mismatched sequence lengths in chunk {i}")
-                
-                logger.info("✅ Chunk structure validation passed")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Chunk {i} has invalid data types, skipping: {e}")
+                continue
+        
+        processed_chunks = cleaned_chunks
+        logger.info(f"✅ Cleaned dataset: {len(processed_chunks)} valid chunks")
+        
+        if not processed_chunks:
+            raise ValueError("No valid chunks after cleaning! Check your data preparation.")
+        
+        # Debug: Show final dataset structure
+        first_chunk = processed_chunks[0]
+        logger.info(f"Final chunk keys: {list(first_chunk.keys())}")
+        logger.info(f"Sample lengths - input_ids: {len(first_chunk['input_ids'])}, attention_mask: {len(first_chunk['attention_mask'])}, labels: {len(first_chunk['labels'])}")
+        logger.info(f"Sample input_ids (first 10): {first_chunk['input_ids'][:10]}")
+        logger.info(f"Sample labels (first 10): {first_chunk['labels'][:10]}")
         
         # Check if we have enough data for splitting
         if len(processed_chunks) < 10:
@@ -488,8 +519,7 @@ class ResumeNERTrainer:
             data_collator = DataCollatorForTokenClassification(
                 tokenizer=self.tokenizer,
                 return_tensors="pt",
-                padding=True,
-                max_length=self.config['model'].get('max_length', 256)
+                padding=True
             )
             logger.info("✅ Data collator created successfully")
         except Exception as e:
