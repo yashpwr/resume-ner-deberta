@@ -15,6 +15,8 @@ import yaml
 # Disable wandb completely to avoid interactive prompts in Kaggle
 os.environ["WANDB_DISABLED"] = "true"
 os.environ["WANDB_MODE"] = "disabled"
+# Disable tokenizers parallelism to avoid forking issues
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Add the src directory to Python path for imports
 script_dir = Path(__file__).parent
@@ -199,32 +201,79 @@ class ResumeNERTrainer:
                 chunker = None
         
         if chunker is None:
-            # Fallback: create simple chunks without complex processing
-            logger.info("Creating fallback chunks...")
+            # Fallback: create proper tokenized chunks
+            logger.info("Creating fallback tokenized chunks...")
+            
+            # Initialize a basic tokenizer for fallback
+            from transformers import AutoTokenizer
+            fallback_tokenizer = AutoTokenizer.from_pretrained(
+                self.config['model'].get('name', 'microsoft/deberta-v3-small')
+            )
+            if fallback_tokenizer.pad_token is None:
+                fallback_tokenizer.pad_token = fallback_tokenizer.eos_token
+            
             processed_chunks = []
+            max_length = self.config['model'].get('max_length', 256)
+            
             for sample in normalized_samples:
                 if 'tokens' in sample and 'labels' in sample:
-                    # Convert labels to IDs
-                    label_ids = []
-                    for label in sample['labels'][:self.config['model']['max_length']]:
-                        label_ids.append(self.label2id.get(label, 0))  # 0 is O
+                    # Join tokens back to text for proper tokenization
+                    text = ' '.join(sample['tokens'])
                     
-                    # Create simple chunk
+                    # Tokenize the text
+                    tokenized = fallback_tokenizer(
+                        text,
+                        max_length=max_length,
+                        padding='max_length',
+                        truncation=True,
+                        return_tensors=None
+                    )
+                    
+                    # Align labels with tokenized text (simple alignment)
+                    original_labels = sample['labels'][:max_length]
+                    
+                    # Create label sequence that matches tokenized length
+                    labels = []
+                    token_count = len(tokenized['input_ids'])
+                    
+                    # Simple label alignment - repeat first few labels and pad with O
+                    for i in range(token_count):
+                        if i < len(original_labels):
+                            label = original_labels[i]
+                        else:
+                            label = 'O'  # Default to O for padding
+                        labels.append(self.label2id.get(label, 0))
+                    
+                    # Create chunk with proper structure
                     chunk = {
-                        'input_ids': [1] * min(len(sample['tokens']), self.config['model']['max_length']),
-                        'attention_mask': [1] * min(len(sample['tokens']), self.config['model']['max_length']),
-                        'labels': label_ids
+                        'input_ids': tokenized['input_ids'],
+                        'attention_mask': tokenized['attention_mask'],
+                        'labels': labels
                     }
                     processed_chunks.append(chunk)
             
-            logger.info(f"✅ Created {len(processed_chunks)} fallback chunks")
+            logger.info(f"✅ Created {len(processed_chunks)} fallback tokenized chunks")
         
-        # Debug: Show chunk structure
+        # Debug: Show chunk structure and validate
         if processed_chunks:
             first_chunk = processed_chunks[0]
             logger.info(f"Chunk keys: {list(first_chunk.keys())}")
             if 'labels' in first_chunk:
                 logger.info(f"First chunk has {len(first_chunk['labels'])} labels")
+                logger.info(f"Input IDs length: {len(first_chunk.get('input_ids', []))}")
+                logger.info(f"Attention mask length: {len(first_chunk.get('attention_mask', []))}")
+                
+                # Validate chunk structure
+                for i, chunk in enumerate(processed_chunks[:3]):  # Check first 3 chunks
+                    if not all(key in chunk for key in ['input_ids', 'attention_mask', 'labels']):
+                        logger.error(f"Chunk {i} missing required keys")
+                        raise ValueError(f"Invalid chunk structure at index {i}")
+                    
+                    if len(chunk['input_ids']) != len(chunk['attention_mask']) or len(chunk['input_ids']) != len(chunk['labels']):
+                        logger.error(f"Chunk {i} has mismatched lengths: input_ids={len(chunk['input_ids'])}, attention_mask={len(chunk['attention_mask'])}, labels={len(chunk['labels'])}")
+                        raise ValueError(f"Mismatched sequence lengths in chunk {i}")
+                
+                logger.info("✅ Chunk structure validation passed")
         
         # Check if we have enough data for splitting
         if len(processed_chunks) < 10:
@@ -429,7 +478,7 @@ class ResumeNERTrainer:
             save_total_limit=3,
             
             # Other
-            dataloader_num_workers=4,
+            dataloader_num_workers=0,  # Set to 0 for Kaggle to avoid multiprocessing issues
             remove_unused_columns=False,
             seed=int(self.config.get('seed', 42))
         )
@@ -438,7 +487,9 @@ class ResumeNERTrainer:
         try:
             data_collator = DataCollatorForTokenClassification(
                 tokenizer=self.tokenizer,
-                return_tensors="pt"
+                return_tensors="pt",
+                padding=True,
+                max_length=self.config['model'].get('max_length', 256)
             )
             logger.info("✅ Data collator created successfully")
         except Exception as e:
