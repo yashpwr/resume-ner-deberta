@@ -1,5 +1,5 @@
 model:
-  name: "microsoft/deberta-v3-small"
+  name: "bert-base-uncased"  # Changed from deberta-v3-small to avoid tokenizer issues in Kaggle
   max_length: 192 # was 256, shorter for Kaggle wall time
   stride: 32
 

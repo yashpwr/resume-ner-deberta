@@ -220,7 +220,8 @@ class ResumeNERTrainer:
             # Initialize a basic tokenizer for fallback
             from transformers import AutoTokenizer
             fallback_tokenizer = AutoTokenizer.from_pretrained(
-                self.config['model'].get('name', 'microsoft/deberta-v3-small')
+                self.config['model'].get('name', 'microsoft/deberta-v3-small'),
+                use_fast=False  # Use slow tokenizer to avoid conversion issues
             )
             if fallback_tokenizer.pad_token is None:
                 fallback_tokenizer.pad_token = fallback_tokenizer.eos_token
@@ -367,14 +368,14 @@ class ResumeNERTrainer:
         
         # Load tokenizer with fallback options
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
             logger.info(f"✅ Loaded tokenizer: {model_name}")
         except Exception as e:
             logger.warning(f"Failed to load {model_name} tokenizer: {e}")
             # Fallback to a more compatible model
             fallback_model = "microsoft/deberta-base"
             logger.info(f"Trying fallback model: {fallback_model}")
-            self.tokenizer = AutoTokenizer.from_pretrained(fallback_model)
+            self.tokenizer = AutoTokenizer.from_pretrained(fallback_model, use_fast=False)
             # Update config to use fallback model
             self.config['model']['name'] = fallback_model
         
@@ -622,12 +623,24 @@ class ResumeNERTrainer:
         # If CLI provided --resume_from_checkpoint use it; else auto-detect latest.
         resume_path = getattr(self, "resume_from_checkpoint", None)
         if not resume_path:
-            resume_path = _latest_checkpoint(model_dir)
+            try:
+                resume_path = _latest_checkpoint(model_dir)
+            except:
+                # In case of PyTorch security issues or other checkpoint problems
+                logger.warning("Could not resume from checkpoint, starting fresh training")
+                resume_path = None
 
         logger.info(f"Resume from checkpoint: {resume_path or 'None'}")
 
         # Call trainer.train with resume parameter (True or checkpoint path both work)
-        train_output = trainer.train(resume_from_checkpoint=resume_path or False)
+        try:
+            train_output = trainer.train(resume_from_checkpoint=resume_path or False)
+        except ValueError as e:
+            if "torch.load" in str(e) or "CVE-2025-32434" in str(e):
+                logger.warning("PyTorch security issue detected, starting training from scratch")
+                train_output = trainer.train(resume_from_checkpoint=False)
+            else:
+                raise
         trainer.save_model(model_dir)
         
         # Get the directory where this script is located
