@@ -399,15 +399,15 @@ class ResumeNERTrainer:
         # Training arguments with fallbacks
         training_args = TrainingArguments(
             output_dir=self.config['output'].get('model_dir', 'artifacts/model'),
-            num_train_epochs=self.config['training'].get('num_epochs', 3),
-            per_device_train_batch_size=self.config['training'].get('batch_size', 8),
-            per_device_eval_batch_size=self.config['training'].get('batch_size', 8),
-            gradient_accumulation_steps=self.config['training'].get('grad_accum_steps', 2),
-            learning_rate=self.config['training'].get('learning_rate', 3e-4),
-            weight_decay=self.config['training'].get('weight_decay', 0.01),
-            warmup_steps=self.config['training'].get('warmup_steps', 100),
-            fp16=self.config['training'].get('fp16', True),
-            label_smoothing_factor=self.config['training'].get('label_smoothing', 0.05),
+            num_train_epochs=int(self.config['training'].get('num_epochs', 3)),
+            per_device_train_batch_size=int(self.config['training'].get('batch_size', 8)),
+            per_device_eval_batch_size=int(self.config['training'].get('batch_size', 8)),
+            gradient_accumulation_steps=int(self.config['training'].get('grad_accum_steps', 2)),
+            learning_rate=float(self.config['training'].get('learning_rate', 3e-4)),
+            weight_decay=float(self.config['training'].get('weight_decay', 0.01)),
+            warmup_steps=int(self.config['training'].get('warmup_steps', 100)),
+            fp16=bool(self.config['training'].get('fp16', True)),
+            label_smoothing_factor=float(self.config['training'].get('label_smoothing', 0.05)),
             
             # Evaluation
             eval_strategy="epoch",
@@ -427,7 +427,7 @@ class ResumeNERTrainer:
             # Other
             dataloader_num_workers=4,
             remove_unused_columns=False,
-            seed=self.config.get('seed', 42)
+            seed=int(self.config.get('seed', 42))
         )
         
         # Data collator
@@ -443,7 +443,7 @@ class ResumeNERTrainer:
         
         # Early stopping callback with fallback
         early_stopping = EarlyStoppingCallback(
-            early_stopping_patience=self.config['training'].get('early_stopping_patience', 3)
+            early_stopping_patience=int(self.config['training'].get('early_stopping_patience', 3))
         )
         
         # Initialize trainer
@@ -453,7 +453,7 @@ class ResumeNERTrainer:
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=val_dataset,
-                tokenizer=self.tokenizer,
+                processing_class=self.tokenizer,
                 data_collator=data_collator,
                 compute_metrics=self.compute_metrics,
                 callbacks=[early_stopping]
