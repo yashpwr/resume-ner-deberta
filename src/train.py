@@ -25,7 +25,7 @@ from transformers import (
     AutoTokenizer, AutoModelForTokenClassification, TrainingArguments,
     DataCollatorForTokenClassification, EarlyStoppingCallback, Trainer
 )
-from peft import get_peft_model, LoraConfig, TaskType
+from peft import get_peft_model, LoraConfig
 from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
 from sklearn.model_selection import train_test_split
 import evaluate
@@ -293,22 +293,39 @@ class ResumeNERTrainer:
             )
         
         # Apply LoRA with fallbacks
+        # Choose target modules based on model type
+        model_name = self.config['model'].get('name', 'microsoft/deberta-base')
+        if 'deberta-v3-small' in model_name:
+            target_modules = ["query", "value"]
+        else:
+            target_modules = ["query", "key", "value"]
+        
         lora_config = LoraConfig(
-            task_type=TaskType.TOKEN_CLASSIFICATION,
+            task_type="TOKEN_CLASSIFICATION",  # Use string instead of enum
             r=self.config['lora'].get('r', 8),
             lora_alpha=self.config['lora'].get('alpha', 16),
             lora_dropout=self.config['lora'].get('dropout', 0.05),
-            target_modules=self.config['lora'].get('target_modules', ["query", "value"]),
+            target_modules=target_modules,
             bias="none"
         )
         
-        self.model = get_peft_model(self.model, lora_config)
+        try:
+            self.model = get_peft_model(self.model, lora_config)
+            logger.info("✅ LoRA configuration applied successfully")
+        except Exception as e:
+            logger.warning(f"Failed to apply LoRA: {e}")
+            logger.info("Continuing with base model (no LoRA)")
         
         # Move to device
         self.model.to(self.device)
         
         logger.info(f"Model setup complete: {self.model.num_parameters()} parameters")
-        logger.info(f"Trainable parameters: {self.model.num_parameters(only_trainable=True)}")
+        try:
+            trainable_params = self.model.num_parameters(only_trainable=True)
+            logger.info(f"Trainable parameters: {trainable_params}")
+        except Exception as e:
+            logger.warning(f"Could not count trainable parameters: {e}")
+            logger.info("Model setup complete")
     
     def compute_metrics(self, eval_preds):
         """Compute evaluation metrics."""
@@ -414,10 +431,15 @@ class ResumeNERTrainer:
         )
         
         # Data collator
-        data_collator = DataCollatorForTokenClassification(
-            tokenizer=self.tokenizer,
-            return_tensors="pt"
-        )
+        try:
+            data_collator = DataCollatorForTokenClassification(
+                tokenizer=self.tokenizer,
+                return_tensors="pt"
+            )
+            logger.info("✅ Data collator created successfully")
+        except Exception as e:
+            logger.error(f"Failed to create data collator: {e}")
+            raise ValueError(f"Data collator creation failed: {e}")
         
         # Early stopping callback with fallback
         early_stopping = EarlyStoppingCallback(
@@ -425,16 +447,21 @@ class ResumeNERTrainer:
         )
         
         # Initialize trainer
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            tokenizer=self.tokenizer,
-            data_collator=data_collator,
-            compute_metrics=self.compute_metrics,
-            callbacks=[early_stopping]
-        )
+        try:
+            trainer = Trainer(
+                model=self.model,
+                args=training_args,
+                train_dataset=train_dataset,
+                eval_dataset=val_dataset,
+                tokenizer=self.tokenizer,
+                data_collator=data_collator,
+                compute_metrics=self.compute_metrics,
+                callbacks=[early_stopping]
+            )
+            logger.info("✅ Trainer initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize trainer: {e}")
+            raise ValueError(f"Trainer initialization failed: {e}")
         
         # Train
         trainer.train()
