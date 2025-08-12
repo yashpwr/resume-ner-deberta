@@ -377,7 +377,47 @@ sys.path.append('/kaggle/working/resume-ner-deberta/src')
 
 from data_io import load_all_datasets
 from label_space import process_label_space
-from chunk_align import create_tokenizer_chunker
+```
+
+### **Step 5: Quick Kaggle Training (Recommended)**
+
+For the fastest setup on Kaggle, use the one-shot script:
+
+```bash
+# Kaggle cell
+!pip install kagglehub
+!python scripts/kaggle_run.py
+```
+
+**Important Notes:**
+- Use **Save Version → Run All** so training continues if you close the tab (Kaggle ~12h limit).
+- Training auto-resumes from the latest checkpoint in `artifacts/model/` on the next run.
+- The script automatically handles data loading, preprocessing, and training setup.
+
+### **Step 6: Manual Training (Alternative)**
+
+If you prefer manual control, you can also run training directly:
+
+```bash
+# Manual training
+!python -m src.train --config configs/train.yaml
+
+# Resume from specific checkpoint
+!python -m src.train --config configs/train.yaml --resume_from_checkpoint artifacts/model/checkpoint-500
+
+# Or use Makefile shortcuts
+!make kaggle-train
+!make resume
+```
+
+### **Step 7: Training Configuration**
+
+The training is now optimized for Kaggle with:
+- **Shorter sequences**: `max_length: 192` (was 256) for faster training
+- **Smaller batches**: `batch_size: 4` with `grad_accum_steps: 4` for memory efficiency
+- **Frequent checkpoints**: Every 500 steps for easy resuming
+- **Gradient checkpointing**: Enabled for memory optimization
+- **Auto-resume**: Automatically finds and resumes from latest checkpoint
 
 # Load and process datasets
 print("Loading datasets...")

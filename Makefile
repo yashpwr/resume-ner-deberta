@@ -1,4 +1,4 @@
-.PHONY: setup fetch merge train eval predict serve onnx clean
+.PHONY: setup fetch merge train eval predict serve onnx clean kaggle kaggle-train resume
 
 setup:
 	pip install -r requirements.txt
@@ -33,3 +33,12 @@ test:
 	python -m pytest tests/ -v
 
 all: setup fetch merge train eval
+
+kaggle:
+	python scripts/kaggle_run.py
+
+kaggle-train:
+	python -m src.train --config configs/train.yaml
+
+resume:
+	python -m src.train --config configs/train.yaml --resume_from_checkpoint artifacts/model/checkpoint-last
