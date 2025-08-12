@@ -716,7 +716,12 @@ class ResumeNERTrainer:
             logger.info("Test Results:")
             for key, value in test_results.items():
                 if key != 'classification_report':
-                    logger.info(f"{key}: {value:.4f}")
+                    if isinstance(value, (float, int)):
+                        logger.info(f"{key}: {value:.4f}")
+                    else:
+                        logger.info(f"{key}: {value}")
+                else:
+                    logger.info(f"{key}: {json.dumps(value, indent=2)}")
             
             # Save test results
             script_dir = Path(__file__).parent.parent
