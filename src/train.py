@@ -81,13 +81,13 @@ class ResumeNERTrainer:
         torch.manual_seed(self.config.get('seed', 42))
         np.random.seed(self.config.get('seed', 42))
         
-        self.logger.info("Resume NER Trainer initialized")
+    logger.info("Resume NER Trainer initialized")
     
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """Load training configuration."""
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
-        self.logger.info(f"Loaded config from {config_path}")
+        logger.info(f"Loaded config from {config_path}")
         return config
     
     def setup_logging(self):
@@ -101,25 +101,25 @@ class ResumeNERTrainer:
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             handlers=[logging.StreamHandler(), logging.FileHandler(log_file)]
         )
-        self.logger = logging.getLogger("resume-ner-train")
+    # logger = logging.getLogger("resume-ner-train")
     
     def setup_device(self):
         """Setup device (GPU/CPU)."""
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.logger.info(f"Using device: {self.device}")
+        logger.info(f"Using device: {self.device}")
     
     def load_and_preprocess_data(self) -> Tuple[Dataset, Dataset, Dataset]:
         """Load and preprocess all datasets."""
-        self.logger.info("Loading datasets...")
+        logger.info("Loading datasets...")
         
         # Try to load from standardized dataset first
         standardized_path = Path(__file__).parent.parent / 'data' / 'standardized' / 'unified_dataset.json'
         if standardized_path.exists():
-            self.logger.info("Loading from standardized dataset...")
+            logger.info("Loading from standardized dataset...")
             try:
                 with open(standardized_path, 'r') as f:
                     samples = json.load(f)
-                self.logger.info(f"✅ Loaded {len(samples)} samples from standardized dataset")
+                logger.info(f"✅ Loaded {len(samples)} samples from standardized dataset")
                 
                 # Convert to expected format
                 normalized_samples = []
@@ -159,35 +159,35 @@ class ResumeNERTrainer:
                 self.label2id = {label: idx for idx, label in enumerate(sorted_labels)}
                 self.id2label = {idx: label for label, idx in self.label2id.items()}
                 
-                self.logger.info(f"✅ Converted {len(normalized_samples)} samples to training format")
-                self.logger.info(f"✅ Created label mapping: {len(self.label2id)} labels")
+                logger.info(f"✅ Converted {len(normalized_samples)} samples to training format")
+                logger.info(f"✅ Created label mapping: {len(self.label2id)} labels")
                 
             except Exception as e:
-                self.logger.warning(f"Failed to load standardized dataset: {e}")
+                logger.warning(f"Failed to load standardized dataset: {e}")
                 normalized_samples = []
         else:
-            self.logger.info("Standardized dataset not found, trying original data loaders...")
+            logger.info("Standardized dataset not found, trying original data loaders...")
             # Load all datasets
             try:
                 samples = load_all_datasets()
                 if not samples:
                     raise ValueError("No samples loaded from datasets")
                 
-                self.logger.info(f"Loaded {len(samples)} raw samples")
+                logger.info(f"Loaded {len(samples)} raw samples")
                 
                 # Process label space
                 label_manager, normalized_samples = process_label_space(samples)
                 self.label2id = label_manager.label2id
                 self.id2label = label_manager.id2label
                 
-                self.logger.info(f"Label space: {len(self.label2id)} labels")
+                logger.info(f"Label space: {len(self.label2id)} labels")
                 
             except Exception as e:
-                self.logger.error(f"Failed to load datasets: {e}")
+                logger.error(f"Failed to load datasets: {e}")
                 # Create minimal label mappings as fallback
                 self.label2id = {'O': 0, 'B-SKILL': 1, 'I-SKILL': 2}
                 self.id2label = {0: 'O', 1: 'B-SKILL', 2: 'I-SKILL'}
-                self.logger.warning("Using fallback label mappings")
+                logger.warning("Using fallback label mappings")
                 
                 if not normalized_samples:
                     raise ValueError(f"Could not load any training data: {e}")
@@ -199,23 +199,23 @@ class ResumeNERTrainer:
                 max_length=self.config['model'].get('max_length', 256),
                 stride=self.config['model'].get('stride', 32)
             )
-            self.logger.info("✅ Tokenizer and chunker created successfully")
+            logger.info("✅ Tokenizer and chunker created successfully")
         except Exception as e:
-            self.logger.warning(f"Failed to create chunker: {e}")
+            logger.warning(f"Failed to create chunker: {e}")
             chunker = None
         
         # Prepare for training
         if chunker is not None:
             try:
                 processed_chunks, _ = chunker.prepare_for_training(normalized_samples)
-                self.logger.info(f"✅ Created {len(processed_chunks)} training chunks")
+                logger.info(f"✅ Created {len(processed_chunks)} training chunks")
             except Exception as e:
-                self.logger.error(f"Failed to prepare training data: {e}")
+                logger.error(f"Failed to prepare training data: {e}")
                 chunker = None
         
         if chunker is None:
             # Fallback: create proper tokenized chunks
-            self.logger.info("Creating fallback tokenized chunks...")
+            logger.info("Creating fallback tokenized chunks...")
             
             # Initialize a basic tokenizer for fallback
             from transformers import AutoTokenizer
@@ -273,20 +273,20 @@ class ResumeNERTrainer:
                     
                     # Ensure all sequences have the same length
                     if len(chunk['input_ids']) != len(chunk['attention_mask']) or len(chunk['input_ids']) != len(chunk['labels']):
-                        self.logger.warning(f"Sequence length mismatch in sample, skipping...")
+                        logger.warning(f"Sequence length mismatch in sample, skipping...")
                         continue
                     
                     processed_chunks.append(chunk)
             
-            self.logger.info(f"✅ Created {len(processed_chunks)} fallback tokenized chunks")
+            logger.info(f"✅ Created {len(processed_chunks)} fallback tokenized chunks")
         
         # Clean and validate processed chunks
-        self.logger.info("Cleaning and validating dataset...")
+        logger.info("Cleaning and validating dataset...")
         cleaned_chunks = []
         for i, chunk in enumerate(processed_chunks):
             # Ensure chunk has all required keys
             if not all(key in chunk for key in ['input_ids', 'attention_mask', 'labels']):
-                self.logger.warning(f"Chunk {i} missing required keys, skipping...")
+                logger.warning(f"Chunk {i} missing required keys, skipping...")
                 continue
             
             # Convert to lists if they're not already
@@ -304,31 +304,31 @@ class ResumeNERTrainer:
                 if len(chunk['input_ids']) == len(chunk['attention_mask']) == len(chunk['labels']):
                     cleaned_chunks.append(chunk)
                 else:
-                    self.logger.warning(f"Chunk {i} has mismatched lengths, skipping...")
+                    logger.warning(f"Chunk {i} has mismatched lengths, skipping...")
                     
             except (ValueError, TypeError) as e:
-                self.logger.warning(f"Chunk {i} has invalid data types, skipping: {e}")
+                logger.warning(f"Chunk {i} has invalid data types, skipping: {e}")
                 continue
         
         processed_chunks = cleaned_chunks
-        self.logger.info(f"✅ Cleaned dataset: {len(processed_chunks)} valid chunks")
+        logger.info(f"✅ Cleaned dataset: {len(processed_chunks)} valid chunks")
         
         if not processed_chunks:
             raise ValueError("No valid chunks after cleaning! Check your data preparation.")
         
         # Debug: Show final dataset structure
         first_chunk = processed_chunks[0]
-        self.logger.info(f"Final chunk keys: {list(first_chunk.keys())}")
-        self.logger.info(f"Sample lengths - input_ids: {len(first_chunk['input_ids'])}, attention_mask: {len(first_chunk['attention_mask'])}, labels: {len(first_chunk['labels'])}")
-        self.logger.info(f"Sample input_ids (first 10): {first_chunk['input_ids'][:10]}")
-        self.logger.info(f"Sample labels (first 10): {first_chunk['labels'][:10]}")
+        logger.info(f"Final chunk keys: {list(first_chunk.keys())}")
+        logger.info(f"Sample lengths - input_ids: {len(first_chunk['input_ids'])}, attention_mask: {len(first_chunk['attention_mask'])}, labels: {len(first_chunk['labels'])}")
+        logger.info(f"Sample input_ids (first 10): {first_chunk['input_ids'][:10]}")
+        logger.info(f"Sample labels (first 10): {first_chunk['labels'][:10]}")
         
         # Check if we have enough data for splitting
         if len(processed_chunks) < 10:
             raise ValueError(f"Not enough data for splitting. Need at least 10 chunks, got {len(processed_chunks)}")
         
         # Split into train/val/test using stratified split with fallback
-        self.logger.info("Splitting data into train/val/test sets...")
+        logger.info("Splitting data into train/val/test sets...")
         
         # Replace the first stratified split with a safe fallback:
         try:
@@ -352,7 +352,7 @@ class ResumeNERTrainer:
                 temp_chunks, test_size=0.5, random_state=42
             )
         
-        self.logger.info(f"Split: {len(train_chunks)} train, {len(val_chunks)} val, {len(test_chunks)} test")
+        logger.info(f"Split: {len(train_chunks)} train, {len(val_chunks)} val, {len(test_chunks)} test")
         
         # Convert to HuggingFace datasets
         train_dataset = Dataset.from_list(train_chunks)
@@ -368,12 +368,12 @@ class ResumeNERTrainer:
         # Load tokenizer with fallback options
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.logger.info(f"✅ Loaded tokenizer: {model_name}")
+            logger.info(f"✅ Loaded tokenizer: {model_name}")
         except Exception as e:
-            self.logger.warning(f"Failed to load {model_name} tokenizer: {e}")
+            logger.warning(f"Failed to load {model_name} tokenizer: {e}")
             # Fallback to a more compatible model
             fallback_model = "microsoft/deberta-base"
-            self.logger.info(f"Trying fallback model: {fallback_model}")
+            logger.info(f"Trying fallback model: {fallback_model}")
             self.tokenizer = AutoTokenizer.from_pretrained(fallback_model)
             # Update config to use fallback model
             self.config['model']['name'] = fallback_model
@@ -390,12 +390,12 @@ class ResumeNERTrainer:
                 label2id=self.label2id,
                 ignore_mismatched_sizes=True
             )
-            self.logger.info(f"✅ Loaded model: {model_name}")
+            logger.info(f"✅ Loaded model: {model_name}")
         except Exception as e:
-            self.logger.warning(f"Failed to load {model_name} model: {e}")
+            logger.warning(f"Failed to load {model_name} model: {e}")
             # Use fallback model
             fallback_model = "microsoft/deberta-base"
-            self.logger.info(f"Loading fallback model: {fallback_model}")
+            logger.info(f"Loading fallback model: {fallback_model}")
             self.model = AutoModelForTokenClassification.from_pretrained(
                 fallback_model,
                 num_labels=len(self.label2id),
@@ -423,21 +423,21 @@ class ResumeNERTrainer:
         
         try:
             self.model = get_peft_model(self.model, lora_config)
-            self.logger.info("✅ LoRA configuration applied successfully")
+            logger.info("✅ LoRA configuration applied successfully")
         except Exception as e:
-            self.logger.warning(f"Failed to apply LoRA: {e}")
-            self.logger.info("Continuing with base model (no LoRA)")
+            logger.warning(f"Failed to apply LoRA: {e}")
+            logger.info("Continuing with base model (no LoRA)")
         
         # Move to device
         self.model.to(self.device)
         
-        self.logger.info(f"Model setup complete: {self.model.num_parameters()} parameters")
+        logger.info(f"Model setup complete: {self.model.num_parameters()} parameters")
         try:
             trainable_params = self.model.num_parameters(only_trainable=True)
-            self.logger.info(f"Trainable parameters: {trainable_params}")
+            logger.info(f"Trainable parameters: {trainable_params}")
         except Exception as e:
-            self.logger.warning(f"Could not count trainable parameters: {e}")
-            self.logger.info("Model setup complete")
+            logger.warning(f"Could not count trainable parameters: {e}")
+            logger.info("Model setup complete")
     
     def compute_metrics(self, eval_preds):
         """Compute evaluation metrics."""
@@ -506,7 +506,7 @@ class ResumeNERTrainer:
     
     def train(self, train_dataset: Dataset, val_dataset: Dataset):
         """Train the model."""
-        self.logger.info("Starting training...")
+        logger.info("Starting training...")
         
         # Training arguments with fallbacks
         training_args = TrainingArguments(
@@ -587,9 +587,9 @@ class ResumeNERTrainer:
                 return batch
             
             data_collator = custom_data_collator
-            self.logger.info("✅ Custom data collator created successfully")
+            logger.info("✅ Custom data collator created successfully")
         except Exception as e:
-            self.logger.error(f"Failed to create data collator: {e}")
+            logger.error(f"Failed to create data collator: {e}")
             raise ValueError(f"Data collator creation failed: {e}")
         
         # Early stopping callback with fallback
@@ -609,9 +609,9 @@ class ResumeNERTrainer:
                 compute_metrics=self.compute_metrics,
                 callbacks=[early_stopping]
             )
-            self.logger.info("✅ Trainer initialized successfully")
+            logger.info("✅ Trainer initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize trainer: {e}")
+            logger.error(f"Failed to initialize trainer: {e}")
             raise ValueError(f"Trainer initialization failed: {e}")
         
         # Train with resume functionality
@@ -624,7 +624,7 @@ class ResumeNERTrainer:
         if not resume_path:
             resume_path = _latest_checkpoint(model_dir)
 
-        self.logger.info(f"Resume from checkpoint: {resume_path or 'None'}")
+        logger.info(f"Resume from checkpoint: {resume_path or 'None'}")
 
         # Call trainer.train with resume parameter (True or checkpoint path both work)
         train_output = trainer.train(resume_from_checkpoint=resume_path or False)
@@ -653,7 +653,7 @@ class ResumeNERTrainer:
         with open(model_dir / 'label_mappings.json', 'w') as f:
             json.dump(label_mappings, f, indent=2)
         
-        self.logger.info("Training completed!")
+        logger.info("Training completed!")
         return trainer
     
     def run(self):
@@ -669,13 +669,13 @@ class ResumeNERTrainer:
             trainer = self.train(train_dataset, val_dataset)
             
             # Evaluate on test set
-            self.logger.info("Evaluating on test set...")
+            logger.info("Evaluating on test set...")
             test_results = trainer.evaluate(test_dataset)
             
-            self.logger.info("Test Results:")
+            logger.info("Test Results:")
             for key, value in test_results.items():
                 if key != 'classification_report':
-                    self.logger.info(f"{key}: {value:.4f}")
+                    logger.info(f"{key}: {value:.4f}")
             
             # Save test results
             script_dir = Path(__file__).parent.parent
@@ -684,10 +684,10 @@ class ResumeNERTrainer:
             with open(results_file, 'w') as f:
                 json.dump(test_results, f, indent=2)
             
-            self.logger.info(f"Training pipeline completed. Results saved to {results_file}")
+            logger.info(f"Training pipeline completed. Results saved to {results_file}")
             
         except Exception as e:
-            self.logger.error(f"Training failed: {e}")
+            logger.error(f"Training failed: {e}")
             raise
 
 
