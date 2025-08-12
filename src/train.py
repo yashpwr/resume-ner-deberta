@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Tuple, Dict, List, Any, Optional
 import yaml
 
+# Disable wandb completely to avoid interactive prompts in Kaggle
+os.environ["WANDB_DISABLED"] = "true"
+os.environ["WANDB_MODE"] = "disabled"
+
 # Add the src directory to Python path for imports
 script_dir = Path(__file__).parent
 project_root = script_dir.parent
@@ -419,7 +423,7 @@ class ResumeNERTrainer:
             # Logging
             logging_dir=self.config['output'].get('logs_dir', 'artifacts/logs'),
             logging_steps=10,
-            report_to=None,  # Disable wandb/tensorboard for now
+            report_to=[],  # Explicitly disable all reporting (wandb/tensorboard)
             
             # Save
             save_total_limit=3,
@@ -514,6 +518,8 @@ class ResumeNERTrainer:
                     logger.info(f"{key}: {value:.4f}")
             
             # Save test results
+            script_dir = Path(__file__).parent.parent
+            model_dir = script_dir / self.config['output'].get('model_dir', 'artifacts/model')
             results_file = model_dir / 'test_results.json'
             with open(results_file, 'w') as f:
                 json.dump(test_results, f, indent=2)
