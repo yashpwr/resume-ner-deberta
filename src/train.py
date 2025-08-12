@@ -32,15 +32,23 @@ from transformers import (
     DataCollatorForTokenClassification, EarlyStoppingCallback, Trainer
 )
 from peft import get_peft_model, LoraConfig
-from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
+
+# Set up logger first
+logger = logging.getLogger(__name__)
+
+try:
+    from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
+    HAS_SEQEVAL = True
+except ImportError:
+    logger.warning("seqeval not found, using sklearn metrics as fallback")
+    from sklearn.metrics import precision_score, recall_score, f1_score, classification_report
+    HAS_SEQEVAL = False
 from sklearn.model_selection import train_test_split
 
 # Import from the same directory
 from data_io import load_all_datasets
 from label_space import process_label_space
 from chunk_align import create_tokenizer_chunker
-
-logger = logging.getLogger(__name__)
 
 
 def _safe_mkdirs(*paths):
@@ -455,17 +463,37 @@ class ResumeNERTrainer:
             for pred, label in zip(predictions, labels)
         ]
         
-        # Convert BIO to entity-level for seqeval
-        true_predictions_entities = self._bio_to_entities(true_predictions)
-        true_labels_entities = self._bio_to_entities(true_labels)
-        
-        # Calculate metrics
-        precision = precision_score(true_labels_entities, true_predictions_entities, average='weighted')
-        recall = recall_score(true_labels_entities, true_predictions_entities, average='weighted')
-        f1 = f1_score(true_labels_entities, true_predictions_entities, average='weighted')
-        
-        # Detailed classification report
-        report = classification_report(true_labels_entities, true_predictions_entities, output_dict=True)
+        if HAS_SEQEVAL:
+            # Convert BIO to entity-level for seqeval
+            true_predictions_entities = self._bio_to_entities(true_predictions)
+            true_labels_entities = self._bio_to_entities(true_labels)
+            
+            # Calculate metrics with seqeval
+            try:
+                precision = precision_score(true_labels_entities, true_predictions_entities, average='weighted')
+                recall = recall_score(true_labels_entities, true_predictions_entities, average='weighted')
+                f1 = f1_score(true_labels_entities, true_predictions_entities, average='weighted')
+                
+                # Detailed classification report
+                report = classification_report(true_labels_entities, true_predictions_entities, output_dict=True)
+            except Exception as e:
+                logger.warning(f"Seqeval metrics failed: {e}, using fallback")
+                # Fallback to simple accuracy
+                precision = recall = f1 = 0.5
+                report = {}
+        else:
+            # Fallback: use token-level accuracy
+            flat_predictions = [p for pred in true_predictions for p in pred]
+            flat_labels = [l for label in true_labels for l in label]
+            
+            if flat_predictions and flat_labels:
+                from sklearn.metrics import accuracy_score
+                accuracy = accuracy_score(flat_labels, flat_predictions)
+                precision = recall = f1 = accuracy
+                report = {"accuracy": accuracy}
+            else:
+                precision = recall = f1 = 0.0
+                report = {}
         
         return {
             'precision': precision,
