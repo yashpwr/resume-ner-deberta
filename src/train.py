@@ -34,7 +34,6 @@ from transformers import (
 from peft import get_peft_model, LoraConfig
 from seqeval.metrics import precision_score, recall_score, f1_score, classification_report
 from sklearn.model_selection import train_test_split
-import evaluate
 
 # Import from the same directory
 from data_io import load_all_datasets
@@ -232,12 +231,16 @@ class ResumeNERTrainer:
                         return_overflowing_tokens=False
                     )
                     
+                    # Extract only the essential fields we need
+                    input_ids = tokenized.get('input_ids', [])
+                    attention_mask = tokenized.get('attention_mask', [])
+                    
                     # Align labels with tokenized text (simple alignment)
                     original_labels = sample['labels'][:max_length]
                     
                     # Create label sequence that matches tokenized length
                     labels = []
-                    token_count = len(tokenized['input_ids'])
+                    token_count = len(input_ids)
                     
                     # Simple label alignment - repeat first few labels and pad with O
                     for i in range(token_count):
@@ -249,8 +252,8 @@ class ResumeNERTrainer:
                     
                     # Create chunk with proper structure - only keep essential keys
                     chunk = {
-                        'input_ids': tokenized['input_ids'],
-                        'attention_mask': tokenized['attention_mask'],
+                        'input_ids': input_ids,
+                        'attention_mask': attention_mask,
                         'labels': labels
                     }
                     
@@ -514,14 +517,51 @@ class ResumeNERTrainer:
             seed=int(self.config.get('seed', 42))
         )
         
-        # Data collator
+        # Data collator - use a simpler approach to avoid extra fields
         try:
-            data_collator = DataCollatorForTokenClassification(
-                tokenizer=self.tokenizer,
-                return_tensors="pt",
-                padding=True
-            )
-            logger.info("✅ Data collator created successfully")
+            tokenizer = self.tokenizer  # Capture tokenizer in closure
+            
+            def custom_data_collator(features):
+                # Only keep essential fields and ensure proper format
+                batch = {}
+                
+                # Get the maximum length in this batch
+                max_len = max(len(f["input_ids"]) for f in features)
+                
+                # Pad sequences manually
+                batch["input_ids"] = []
+                batch["attention_mask"] = []
+                batch["labels"] = []
+                
+                # Get pad token ID with fallback
+                pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+                if pad_token_id is None:
+                    pad_token_id = 0  # fallback to 0
+                
+                for feature in features:
+                    # Ensure we only have the fields we need
+                    input_ids = list(feature["input_ids"])[:max_len]
+                    attention_mask = list(feature["attention_mask"])[:max_len]
+                    labels = list(feature["labels"])[:max_len]
+                    
+                    # Pad to max_len
+                    pad_length = max_len - len(input_ids)
+                    if pad_length > 0:
+                        input_ids.extend([pad_token_id] * pad_length)
+                        attention_mask.extend([0] * pad_length)
+                        labels.extend([-100] * pad_length)  # -100 is ignored in loss computation
+                    
+                    batch["input_ids"].append(input_ids)
+                    batch["attention_mask"].append(attention_mask)
+                    batch["labels"].append(labels)
+                
+                # Convert to tensors
+                import torch
+                batch = {k: torch.tensor(v, dtype=torch.long) for k, v in batch.items()}
+                return batch
+            
+            data_collator = custom_data_collator
+            logger.info("✅ Custom data collator created successfully")
         except Exception as e:
             logger.error(f"Failed to create data collator: {e}")
             raise ValueError(f"Data collator creation failed: {e}")
